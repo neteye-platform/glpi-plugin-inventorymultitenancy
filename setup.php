@@ -5,8 +5,8 @@ function plugin_version_inventorymultitenancy()
 {
     return array('name' => "Inventory Multitenancy",
         'version' => PLUGIN_INVENTORYMULTITENANCY_VERSION,
-        'author' => 'Neteye R&D Team',
-        'license' => 'GPLv2+',
+        'author' => 'NetEye R&D Team',
+        'license' => 'MIT/Apache-2.0',
         'homepage' => 'https://neteye-blog.com',
         'minGlpiVersion' => '10.0.6'); // For compatibility / no install in version < 0.80
 }
