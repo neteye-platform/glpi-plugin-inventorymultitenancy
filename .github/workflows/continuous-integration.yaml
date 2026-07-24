@@ -30,6 +30,15 @@ on:
         type: boolean
         default: false
 
+env:
+  PLUGIN_KEY: "${{ inputs.plugin-key }}"
+  GLPI_VERSION: "${{ inputs.glpi-version }}"
+  PHP_VERSION: "${{ inputs.php-version }}"
+  DB_IMAGE: "${{ inputs.db-image }}"
+  INIT_SCRIPT: "${{ inputs.init-script }}"
+  EXTRA_SERVICES: "${{ inputs.extra-services }}"
+  SKIP_CHANGELOG_CHECK: "${{ inputs.skip-changelog-check }}"
+
 jobs:
   ci:
     name: "Continuous integration"
@@ -61,19 +70,19 @@ jobs:
       run:
         # By default, execute commands using the `www-data` user to prevent rights issues on GLPI generated files.
         shell: "sudo --set-home --user=www-data --preserve-env bash --noprofile --norc -eo pipefail {0}"
-        working-directory: "/var/www/glpi/plugins/${{ inputs.plugin-key }}"
+        working-directory: "/var/www/glpi/plugins/${{ env.PLUGIN_KEY }}"
     env:
       CACHE_DIR: "/home/www-data/.cache/continuous-integration-workflow"
     steps:
       - name: "Checkout"
         uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
         with:
-          path: "${{ inputs.plugin-key }}"
+          path: "${{ env.PLUGIN_KEY }}"
       - name: "Detect coverage configuration"
         id: "coverage-config"
         # Use default `bash` shell with `github-actions-runner` user
         shell: "bash"
-        working-directory: "${{ github.workspace }}/${{ inputs.plugin-key }}"
+        working-directory: "${{ github.workspace }}/${{ env.PLUGIN_KEY }}"
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.base_ref }}" != "${{ github.event.repository.default_branch }}" ]]; then
             echo "coverage-enabled=false" >> $GITHUB_OUTPUT
@@ -96,48 +105,48 @@ jobs:
             exit 0
           fi
       - name: "Execute init script"
-        if: ${{ inputs.init-script != '' }}
+        if: ${{ env.INIT_SCRIPT != '' }}
         # Use default `bash` shell with `github-actions-runner` user
         shell: "bash"
         run: |
-          bash --noprofile --norc ${{ inputs.init-script }}
+          bash --noprofile --norc "$INIT_SCRIPT"
       - name: "Configure cache directories"
         if: ${{ !cancelled() }}
         # Use default `bash` shell with `github-actions-runner` user
         shell: "bash"
         run: |
-          sudo mkdir --parents "${{ env.CACHE_DIR }}/npm"
-          sudo mkdir --parents "${{ env.CACHE_DIR }}/composer"
-          sudo chown --recursive github-actions-runner "${{ env.CACHE_DIR }}"
-          npm config set cache "${{ env.CACHE_DIR }}/npm"
-          composer config cache-dir "${{ env.CACHE_DIR }}/composer"
+          sudo mkdir --parents "${CACHE_DIR}/npm"
+          sudo mkdir --parents "${CACHE_DIR}/composer"
+          sudo chown --recursive github-actions-runner "${CACHE_DIR}"
+          npm config set cache "${CACHE_DIR}/npm"
+          composer config cache-dir "${CACHE_DIR}/composer"
       - name: "Restore cache"
         if: ${{ !cancelled() }}
         uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9" # v6.1.0
         with:
           path: |
             ${{ env.CACHE_DIR }}
-          key: "${{ inputs.plugin-key }}-dependencies-${{ inputs.php-version }}-${{ github.job }}-${{ hashFiles('**/composer.lock', '**/package-lock.json') }}"
+          key: "${{ env.PLUGIN_KEY }}-dependencies-${{ env.PHP_VERSION }}-${{ github.job }}-${{ hashFiles('**/composer.lock', '**/package-lock.json') }}"
           restore-keys: |
-            ${{ inputs.plugin-key }}-dependencies-${{ inputs.php-version }}-${{ github.job }}-
-            ${{ inputs.plugin-key }}-dependencies-${{ inputs.php-version }}-
-            ${{ inputs.plugin-key }}-dependencies-
+            ${{ env.PLUGIN_KEY }}-dependencies-${{ env.PHP_VERSION }}-${{ github.job }}-
+            ${{ env.PLUGIN_KEY }}-dependencies-${{ env.PHP_VERSION }}-
+            ${{ env.PLUGIN_KEY }}-dependencies-
       - name: "Fix directories ACL"
         if: ${{ !cancelled() }}
         # Use default `bash` shell with `github-actions-runner` user
         shell: "bash"
         run: |
-          sudo setfacl --recursive --modify u:www-data:rwx "${{ env.CACHE_DIR }}"
+          sudo setfacl --recursive --modify u:www-data:rwx "${CACHE_DIR}"
           sudo setfacl --recursive --modify u:www-data:rwx /var/www/glpi/plugins
       - name: "Install composer dependencies"
-        if: ${{ !cancelled() && hashFiles(format('{0}/composer.json', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/composer.json', env.PLUGIN_KEY)) != '' }}
         run: |
           echo -e "\033[0;33mMark plugin directory as safe...\033[0m"
-          git config --global --add safe.directory "/var/www/glpi/plugins/${{ inputs.plugin-key }}"
+          git config --global --add safe.directory "/var/www/glpi/plugins/${PLUGIN_KEY}"
           echo -e "\033[0;33mExecuting Composer install...\033[0m"
           composer install --ansi --no-interaction --no-progress --prefer-dist
       - name: "Check for common dependencies"
-        if: ${{ !cancelled() && hashFiles(format('{0}/composer.json', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/composer.json', env.PLUGIN_KEY)) != '' }}
         run: |
           echo -e "\033[0;33mChecking for common dependencies between plugin and core...\033[0m"
           PLUGIN_PROD_JSON=$(composer show --direct --no-dev --format=json)
@@ -170,19 +179,19 @@ jobs:
           fi
           echo "✅ No dependency conflicts detected."
       - name: "Install npm dependencies"
-        if: ${{ !cancelled() && hashFiles(format('{0}/package.json', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/package.json', env.PLUGIN_KEY)) != '' }}
         run: |
           npm install --no-save
       # We now need to load the ldif data in the openldap server.
       # TODO: bake the .ldif directly in a custom image so we don't need to do this.
       - name: "Import LDIF"
-        if: ${{ contains(inputs.extra-services, 'openldap') }}
+        if: ${{ contains(env.EXTRA_SERVICES, 'openldap') }}
         run: |
           ldapadd -x -D "cn=admin,dc=glpi,dc=org" -w admin \
             -f ../../tests/LDAP/ldif/10-users.ldif \
             -H ldap://openldap:389
       - name: "Check CHANGELOG update"
-        if: ${{ !cancelled() && !inputs.skip-changelog-check && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && (hashFiles(format('{0}/CHANGELOG.md', inputs.plugin-key)) != '' || hashFiles(format('{0}/CHANGELOG', inputs.plugin-key)) != '') }}
+        if: ${{ !cancelled() && env.SKIP_CHANGELOG_CHECK != 'true' && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && (hashFiles(format('{0}/CHANGELOG.md', env.PLUGIN_KEY)) != '' || hashFiles(format('{0}/CHANGELOG', env.PLUGIN_KEY)) != '') }}
         shell: "bash"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -204,11 +213,10 @@ jobs:
           echo "✅ CHANGELOG updated."
       - name: "Detect XML manifest modification"
         id: "detect-xml-modification"
-        if: ${{ !cancelled() && github.event_name == 'pull_request' && (hashFiles(format('{0}/plugin.xml', inputs.plugin-key)) != '' || hashFiles(format('{0}/{1}.xml', inputs.plugin-key, inputs.plugin-key)) != '') }}
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && (hashFiles(format('{0}/plugin.xml', env.PLUGIN_KEY)) != '' || hashFiles(format('{0}/{1}.xml', env.PLUGIN_KEY, env.PLUGIN_KEY)) != '') }}
         shell: "bash"
         env:
           GH_TOKEN: ${{ github.token }}
-          PLUGIN_KEY: ${{ inputs.plugin-key }}
         run: |
           pr_files=$(curl -s -H "Authorization: token $GH_TOKEN" \
             "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
@@ -223,7 +231,6 @@ jobs:
         shell: "bash"
         env:
           GH_TOKEN: ${{ github.token }}
-          PLUGIN_KEY: ${{ inputs.plugin-key }}
         run: |
           # URLs added in this PR inside <download_url> tags point to archives not yet published
           new_download_urls=$(curl -s -H "Authorization: token $GH_TOKEN" \
@@ -264,7 +271,7 @@ jobs:
             exit 1
           fi
       - name: "PHP CodeSniffer"
-        if: ${{ !cancelled() && hashFiles(format('{0}/.phpcs.xml', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/.phpcs.xml', env.PLUGIN_KEY)) != '' }}
         run: |
           echo -e "\033[0;33mExecuting PHP CodeSniffer...\033[0m"
           if [[ -f "vendor/bin/phpcs" ]]; then
@@ -276,7 +283,7 @@ jobs:
             exit 1
           fi
       - name: "PHP-CS-Fixer"
-        if: ${{ !cancelled() && hashFiles(format('{0}/.php-cs-fixer.php', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/.php-cs-fixer.php', env.PLUGIN_KEY)) != '' }}
         run: |
           echo -e "\033[0;33mExecuting PHP-CS-Fixer...\033[0m"
           if [[ -f "vendor/bin/php-cs-fixer" ]]; then
@@ -288,7 +295,7 @@ jobs:
             exit 1
           fi
       - name: "PHPStan"
-        if: ${{ !cancelled() && hashFiles(format('{0}/phpstan.neon', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/phpstan.neon', env.PLUGIN_KEY)) != '' }}
         run: |
           echo -e "\033[0;33mExecuting PHPStan...\033[0m"
           if [[ -f "vendor/bin/phpstan" ]]; then
@@ -300,7 +307,7 @@ jobs:
             exit 1
           fi
       - name: "Psalm"
-        if: ${{ !cancelled() && hashFiles(format('{0}/psalm.xml', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/psalm.xml', env.PLUGIN_KEY)) != '' }}
         run: |
           echo -e "\033[0;33mExecuting Psalm...\033[0m"
           if [[ -f "vendor/bin/psalm" ]]; then
@@ -312,7 +319,7 @@ jobs:
             exit 1
           fi
       - name: "Rector"
-        if: ${{ !cancelled() && hashFiles(format('{0}/rector.php', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/rector.php', env.PLUGIN_KEY)) != '' }}
         run: |
           echo -e "\033[0;33mExecuting Rector...\033[0m"
           if [[ -f "vendor/bin/rector" ]]; then
@@ -324,7 +331,7 @@ jobs:
             exit 1
           fi
       - name: "JS Lint"
-        if: ${{ !cancelled() && (hashFiles(format('{0}/eslint.config.js', inputs.plugin-key)) != '' || hashFiles(format('{0}/eslint.config.mjs', inputs.plugin-key)) != '' || hashFiles(format('{0}/eslint.config.cjs', inputs.plugin-key)) != '' || hashFiles(format('{0}/.eslintrc.js', inputs.plugin-key)) != '') }}
+        if: ${{ !cancelled() && (hashFiles(format('{0}/eslint.config.js', env.PLUGIN_KEY)) != '' || hashFiles(format('{0}/eslint.config.mjs', env.PLUGIN_KEY)) != '' || hashFiles(format('{0}/eslint.config.cjs', env.PLUGIN_KEY)) != '' || hashFiles(format('{0}/.eslintrc.js', env.PLUGIN_KEY)) != '') }}
         run: |
           echo -e "\033[0;33mExecuting ESLint...\033[0m"
           if [[ -f "node_modules/.bin/eslint" ]]; then
@@ -336,7 +343,7 @@ jobs:
             exit 1
           fi
       - name: "CSS Lint"
-        if: ${{ !cancelled() && hashFiles(format('{0}/.stylelintrc.js', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/.stylelintrc.js', env.PLUGIN_KEY)) != '' }}
         run: |
           echo -e "\033[0;33mExecuting Stylelint...\033[0m"
           if [[ -f "node_modules/.bin/stylelint" ]]; then
@@ -348,7 +355,7 @@ jobs:
             exit 1
           fi
       - name: "Licence header check"
-        if: ${{ !cancelled() && hashFiles(format('{0}/tools/HEADER', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/tools/HEADER', env.PLUGIN_KEY)) != '' }}
         run: |
           echo -e "\033[0;33mExecuting licence headers checks...\033[0m"
           if [[ -f "vendor/bin/licence-headers-check" ]]; then
@@ -357,7 +364,7 @@ jobs:
             ../../vendor/bin/licence-headers-check --ansi --no-interaction --header-file=tools/HEADER -d .
           elif [[ -f "../../bin/console" && -n "$(php ../../bin/console list | grep 'tools:licence_headers_check')" ]]; then
             echo -e "\033[0;33mUsing GLPI core tools:licence_headers_check command...\033[0m"
-            php ../../bin/console tools:licence_headers_check --ansi --no-interaction --plugin=${{ inputs.plugin-key }}
+            php ../../bin/console tools:licence_headers_check --ansi --no-interaction --plugin="$PLUGIN_KEY"
           else
             echo -e "\033[0;31mLicence headers check binary not found!\033[0m"
             exit 1
@@ -369,8 +376,8 @@ jobs:
           bin/console database:install --ansi --no-interaction --db-name=glpi --db-host=db --db-user=root --db-password="" --strict-configuration
           php bin/console config:set url_base "http://localhost"
           php bin/console config:set url_base_api "http://localhost/apirest.php"
-          bin/console plugin:install --ansi --no-interaction --username=glpi ${{ inputs.plugin-key }}
-          bin/console plugin:activate --ansi --no-interaction ${{ inputs.plugin-key }}
+          bin/console plugin:install --ansi --no-interaction --username=glpi "$PLUGIN_KEY"
+          bin/console plugin:activate --ansi --no-interaction "$PLUGIN_KEY"
       - name: "Run apache"
         if: ${{ !cancelled() }}
         # Use default `bash` shell with `github-actions-runner` user
@@ -378,7 +385,7 @@ jobs:
         run: |
           sudo service apache2 start
       - name: "PHPUnit"
-        if: ${{ !cancelled() && hashFiles(format('{0}/phpunit.xml', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/phpunit.xml', env.PLUGIN_KEY)) != '' }}
         run: |
           echo -e "\033[0;33mExecuting PHPUnit...\033[0m"
           PHPUNIT_FLAGS="--colors=always"
@@ -407,20 +414,20 @@ jobs:
         if: ${{ !cancelled() && steps.coverage-config.outputs.coverage-enabled == 'true' }}
         run: |
           echo "Sanitizing paths in clover.xml..."
-          sed -i 's|/var/www/glpi/plugins/${{ inputs.plugin-key }}/|plugins/${{ inputs.plugin-key }}/|g' clover.xml
+          sed -i "s|/var/www/glpi/plugins/${PLUGIN_KEY}/|plugins/${PLUGIN_KEY}/|g" clover.xml
       - name: "Upload coverage report"
         uses: "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" # v7.0.1
         if: ${{ !cancelled() && steps.coverage-config.outputs.coverage-enabled == 'true' }}
         with:
           name: "coverage-report"
           path: |
-            /var/www/glpi/plugins/${{ inputs.plugin-key }}/cobertura.xml
-            /var/www/glpi/plugins/${{ inputs.plugin-key }}/clover.xml
-            /var/www/glpi/plugins/${{ inputs.plugin-key }}/.glpi-coverage.json
+            /var/www/glpi/plugins/${{ env.PLUGIN_KEY }}/cobertura.xml
+            /var/www/glpi/plugins/${{ env.PLUGIN_KEY }}/clover.xml
+            /var/www/glpi/plugins/${{ env.PLUGIN_KEY }}/.glpi-coverage.json
           include-hidden-files: true
           overwrite: true
       - name: "Jest"
-        if: ${{ !cancelled() && hashFiles(format('{0}/jest.config.js', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/jest.config.js', env.PLUGIN_KEY)) != '' }}
         run: |
           echo -e "\033[0;33mExecuting Jest...\033[0m"
           if [[ -f "node_modules/.bin/jest" ]]; then
@@ -432,7 +439,7 @@ jobs:
             exit 1
           fi
       - name: "TwigCS"
-        if: ${{ !cancelled() && hashFiles(format('{0}/.twig_cs.dist.php', inputs.plugin-key)) != '' }}
+        if: ${{ !cancelled() && hashFiles(format('{0}/.twig_cs.dist.php', env.PLUGIN_KEY)) != '' }}
         run: |
           echo -e "\033[0;33mExecuting TwigCS...\033[0m"
           if [[ -f "vendor/bin/twigcs" ]]; then
@@ -448,9 +455,9 @@ jobs:
         working-directory: "/var/www/glpi"
         run: |
           echo -e "\033[0;33mDeactivating plugin...\033[0m"
-          bin/console plugin:deactivate --ansi --no-interaction ${{ inputs.plugin-key }}
+          bin/console plugin:deactivate --ansi --no-interaction "$PLUGIN_KEY"
           echo -e "\033[0;33mUninstalling plugin...\033[0m"
-          bin/console plugin:uninstall --ansi --no-interaction ${{ inputs.plugin-key }}
+          bin/console plugin:uninstall --ansi --no-interaction "$PLUGIN_KEY"
           cat > /tmp/check-uninstall.php << 'PHPEOF'
           <?php
           $plugin_key   = $argv[1] ?? '';
@@ -495,4 +502,4 @@ jobs:
               exit(1);
           }
           PHPEOF
-          php /tmp/check-uninstall.php ${{ inputs.plugin-key }}
+          php /tmp/check-uninstall.php "$PLUGIN_KEY"

@@ -31,7 +31,7 @@ jobs:
       - name: "Check if tag exists"
         run: |
           CREATE_TAG=no
-          if [[ ! -z "${{ env.VERSION }}" && -z "$(git tag -l ${{ env.VERSION }})" ]]; then
+          if [[ ! -z "$VERSION" && -z "$(git tag -l $VERSION" ]]; then
             CREATE_TAG=yes
           fi
           echo "CREATE_TAG=${CREATE_TAG}" >> $GITHUB_ENV
@@ -51,7 +51,7 @@ jobs:
             try {
               github.rest.git.createRef(
                 {
-                  ref: 'refs/tags/${{ env.VERSION }}',
+                  ref: 'refs/tags/$VERSION',
                   sha: context.sha,
                   owner: context.repo.owner,
                   repo: context.repo.repo,

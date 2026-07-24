@@ -7,9 +7,9 @@ on:
       - "*"
 
 env:
-  tag: "${{ github.ref_name }}"
-  release-name: "${{ github.ref_name }}"
-  release-body: ""
+  TAG: "${{ github.ref_name }}"
+  RELEASE_NAME: "${{ github.ref_name }}"
+  RELEASE_BODY: ""
 
 jobs:
   publish-release:
@@ -18,25 +18,23 @@ jobs:
       contents: write
     runs-on: "ubuntu-latest"
     container:
-      image: "ghcr.io/glpi-project/plugin-builder"
+      image: "ghcr.io/glpi-project/plugin-builder@sha256:51f07fb09e627609d212eb8b0e86f90d6e33a8b151ba10d665dea3aa284ad65c"
     steps:
       - name: "Checkout"
         uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
         with:
-          ref: "${{ env.tag }}"
+          ref: "${{ github.ref_name }}"
           fetch-tags: true
       - name: "Build release archive"
         run: |
           composer install --no-progress --no-suggest --no-interaction --prefer-dist
           git config --global --add safe.directory $(pwd)
-          vendor/bin/plugin-release --assume-yes --dont-check --nogithub --nosign --release "${{ env.tag }}" --verbose
+          vendor/bin/plugin-release --assume-yes --dont-check --nogithub --nosign --release "$TAG" --verbose
           echo "PACKAGE_BASENAME=$(find "$(pwd)/dist/" -type f -name '*.tar.bz2' | xargs -n 1 basename)" >> $GITHUB_ENV
           echo "PACKAGE_PATH=$(find "$(pwd)/dist/" -type f -name '*.tar.bz2')" >> $GITHUB_ENV
       - name: "Compute values"
         run: |
-          TAG_NAME="${{ env.tag }}"
-          RELEASE_NAME="${{ env.release-name }}"
-          RELEASE_BODY="${{ env.release-body }}"
+          TAG_NAME=$TAG
           if [[ -z "${RELEASE_BODY}" && -f "CHANGELOG.md" ]]; then
             RELEASE_BODY="See [CHANGELOG.md](CHANGELOG.md) for changes details."
           fi
@@ -115,10 +113,10 @@ jobs:
             echo "No plugin XML file found, skipping check."
             exit 0
           fi
-          EXPECTED_URL="https://github.com/${{ github.repository }}/releases/download/${{ env.TAG_NAME }}/${{ env.PACKAGE_BASENAME }}"
-          XML_URL=$(grep -oP '(?<=<download_url>)[^<]+' "$XML_FILE" | grep "/${{ env.TAG_NAME }}/" | head -1)
+          EXPECTED_URL="https://github.com/${{ github.repository }}/releases/download/$TAG_NAME/$PACKAGE_BASENAME"
+          XML_URL=$(grep -oP '(?<=<download_url>)[^<]+' "$XML_FILE" | grep "/$TAG_NAME/" | head -1)
           if [[ -z "$XML_URL" ]]; then
-            echo "No <download_url> entry for tag ${{ env.TAG_NAME }} in $XML_FILE, skipping check."
+            echo "No <download_url> entry for tag $TAG_NAME in $XML_FILE, skipping check."
             exit 0
           fi
           if [[ "$XML_URL" != "$EXPECTED_URL" ]]; then
