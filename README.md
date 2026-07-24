@@ -4,7 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE-MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE-APACHE)
 
-A [GLPI](https://glpi-project.org/) plugin that enforces **tenant isolation** during native inventory import, so that assets discovered by the GLPI inventory agent can never be created outside the boundary of the entity they belong to.
+A [GLPI](https://glpi-project.org/) plugin that enforces **tenant isolation** during
+native inventory import, so that assets discovered by the GLPI inventory agent can
+never be created outside the boundary of the entity they belong to.
 
 ## Introduction
 

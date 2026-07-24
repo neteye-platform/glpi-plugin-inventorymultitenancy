@@ -4,7 +4,12 @@ name: Publish release
 on:
   push:
     tags:
-       - "*"
+      - "*"
+
+env:
+  tag: "${{ github.ref_name }}"
+  release-name: "${{ github.ref_name }}"
+  release-body: ""
 
 jobs:
   publish-release:
@@ -18,20 +23,20 @@ jobs:
       - name: "Checkout"
         uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
         with:
-          ref: "${{ inputs.tag }}"
+          ref: "${{ env.tag }}"
           fetch-tags: true
       - name: "Build release archive"
         run: |
           composer install --no-progress --no-suggest --no-interaction --prefer-dist
           git config --global --add safe.directory $(pwd)
-          vendor/bin/plugin-release --assume-yes --dont-check --nogithub --nosign --release "${{ inputs.tag }}" --verbose
+          vendor/bin/plugin-release --assume-yes --dont-check --nogithub --nosign --release "${{ env.tag }}" --verbose
           echo "PACKAGE_BASENAME=$(find "$(pwd)/dist/" -type f -name '*.tar.bz2' | xargs -n 1 basename)" >> $GITHUB_ENV
           echo "PACKAGE_PATH=$(find "$(pwd)/dist/" -type f -name '*.tar.bz2')" >> $GITHUB_ENV
       - name: "Compute values"
         run: |
-          TAG_NAME="${{ inputs.tag }}"
-          RELEASE_NAME="${{ inputs.release-name }}"
-          RELEASE_BODY="${{ inputs.release-body }}"
+          TAG_NAME="${{ env.tag }}"
+          RELEASE_NAME="${{ env.release-name }}"
+          RELEASE_BODY="${{ env.release-body }}"
           if [[ -z "${RELEASE_BODY}" && -f "CHANGELOG.md" ]]; then
             RELEASE_BODY="See [CHANGELOG.md](CHANGELOG.md) for changes details."
           fi
