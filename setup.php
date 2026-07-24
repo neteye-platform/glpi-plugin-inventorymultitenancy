@@ -1,10 +1,10 @@
 <?php
-define('INVENTORYMULTITENANCY_VERSION', '0.0.1');
+define('PLUGIN_INVENTORYMULTITENANCY_VERSION', '1.0.0');
 
 function plugin_version_inventorymultitenancy()
 {
     return array('name' => "Inventory Multitenancy",
-        'version' => INVENTORYMULTITENANCY_VERSION,
+        'version' => PLUGIN_INVENTORYMULTITENANCY_VERSION,
         'author' => 'Neteye R&D Team',
         'license' => 'GPLv2+',
         'homepage' => 'https://neteye-blog.com',
