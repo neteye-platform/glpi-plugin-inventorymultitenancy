@@ -49,7 +49,7 @@ jobs:
             try {
               github.rest.git.createRef(
                 {
-                  ref: 'refs/tags/${process.env.VERSION}',
+                  ref: `refs/tags/${process.env.VERSION}`,
                   sha: context.sha,
                   owner: context.repo.owner,
                   repo: context.repo.repo,
