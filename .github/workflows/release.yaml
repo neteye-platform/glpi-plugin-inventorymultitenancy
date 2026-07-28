@@ -1,0 +1,128 @@
+# TODO: Use the official GLPI action when they pin all the action SHA
+name: Publish release
+
+on:
+  push:
+    tags:
+      - "*"
+
+env:
+  TAG: "${{ github.ref_name }}"
+  RELEASE_NAME: "${{ github.ref_name }}"
+  RELEASE_BODY: ""
+
+jobs:
+  publish-release:
+    name: "Publish release"
+    permissions:
+      contents: write
+    runs-on: "ubuntu-latest"
+    container:
+      image: "ghcr.io/glpi-project/plugin-builder@sha256:51f07fb09e627609d212eb8b0e86f90d6e33a8b151ba10d665dea3aa284ad65c"
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
+        with:
+          ref: "${{ github.ref_name }}"
+          fetch-tags: true
+      - name: "Build release archive"
+        run: |
+          composer install --no-progress --no-suggest --no-interaction --prefer-dist
+          git config --global --add safe.directory $(pwd)
+          vendor/bin/plugin-release --assume-yes --dont-check --nogithub --nosign --release "$TAG" --verbose
+          echo "PACKAGE_BASENAME=$(find "$(pwd)/dist/" -type f -name '*.tar.bz2' | xargs -n 1 basename)" >> $GITHUB_ENV
+          echo "PACKAGE_PATH=$(find "$(pwd)/dist/" -type f -name '*.tar.bz2')" >> $GITHUB_ENV
+      - name: "Compute values"
+        run: |
+          TAG_NAME=$TAG
+          if [[ -z "${RELEASE_BODY}" && -f "CHANGELOG.md" ]]; then
+            RELEASE_BODY="See [CHANGELOG.md](CHANGELOG.md) for changes details."
+          fi
+          MIN_GLPI=$(grep -oP "define\s*\(\s*['\"]PLUGIN_[A-Z]+_MIN_GLPI['\"]\s*,\s*['\"]\K[^'\"]+(?=['\"])" setup.php 2>/dev/null || true)
+          MAX_GLPI=$(grep -oP "define\s*\(\s*['\"]PLUGIN_[A-Z]+_MAX_GLPI['\"]\s*,\s*['\"]\K[^'\"]+(?=['\"])" setup.php 2>/dev/null || true)
+          if [[ -n "${MIN_GLPI}" && -n "${MAX_GLPI}" ]]; then
+            COMPAT="**Compatible GLPI**: ${MIN_GLPI} -- ${MAX_GLPI}"
+            if [[ -n "${RELEASE_BODY}" ]]; then
+              RELEASE_BODY="${COMPAT}"$'\n\n'"${RELEASE_BODY}"
+            else
+              RELEASE_BODY="${COMPAT}"
+            fi
+          fi
+          if [[ $( echo ${TAG_NAME} | grep -E "\-(alpha|beta|rc)[0-9]*$" ) ]]; then
+            PRERELEASE="true"
+          else
+            PRERELEASE="false"
+          fi
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
+          echo "RELEASE_NAME=${RELEASE_NAME}" >> $GITHUB_ENV
+          {
+            echo "RELEASE_BODY<<__BODY_EOF__"
+            echo "${RELEASE_BODY}"
+            echo "__BODY_EOF__"
+          } >> $GITHUB_ENV
+          echo "PRERELEASE=${PRERELEASE}" >> $GITHUB_ENV
+      - name: "Create release"
+        uses: "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3" # v9.0.0
+        with:
+          script: |
+            try {
+              const fs = await import('fs');
+              const release = await github.rest.repos.createRelease(
+                {
+                  tag_name: process.env.TAG_NAME,
+                  name: process.env.RELEASE_NAME,
+                  body: process.env.RELEASE_BODY,
+                  draft: true,
+                  prerelease: process.env.PRERELEASE === 'true',
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                }
+              );
+              await github.rest.repos.uploadReleaseAsset(
+                {
+                  release_id: release.data.id,
+                  name: process.env.PACKAGE_BASENAME,
+                  data: fs.readFileSync(process.env.PACKAGE_PATH),
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                }
+              );
+              await github.rest.repos.updateRelease(
+                {
+                  release_id: release.data.id,
+                  draft: false,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                }
+              );
+            } catch (error) {
+              core.setFailed(error.message);
+            }
+      - name: "Verify XML download URL"
+        if: ${{ !cancelled() }}
+        run: |
+          PLUGIN_KEY=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          XML_FILE=""
+          for candidate in "plugin.xml" "${PLUGIN_KEY}.xml"; do
+            if [[ -f "$candidate" ]]; then
+              XML_FILE="$candidate"
+              break
+            fi
+          done
+          if [[ -z "$XML_FILE" ]]; then
+            echo "No plugin XML file found, skipping check."
+            exit 0
+          fi
+          EXPECTED_URL="https://github.com/${{ github.repository }}/releases/download/$TAG_NAME/$PACKAGE_BASENAME"
+          XML_URL=$(grep -oP '(?<=<download_url>)[^<]+' "$XML_FILE" | grep "/$TAG_NAME/" | head -1)
+          if [[ -z "$XML_URL" ]]; then
+            echo "No <download_url> entry for tag $TAG_NAME in $XML_FILE, skipping check."
+            exit 0
+          fi
+          if [[ "$XML_URL" != "$EXPECTED_URL" ]]; then
+            echo "❌ URL mismatch in $XML_FILE:"
+            echo "   Found:       $XML_URL"
+            echo "   Working URL: $EXPECTED_URL"
+            exit 1
+          fi
+          echo "✅ XML download URL matches the published asset: $XML_URL"

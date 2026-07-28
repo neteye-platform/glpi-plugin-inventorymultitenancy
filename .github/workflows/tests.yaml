@@ -1,0 +1,29 @@
+name: Continuous integration
+
+on:
+  pull_request:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+jobs:
+  generate-ci-matrix:
+    name: Generate CI matrix
+    uses: glpi-project/plugin-ci-workflows/.github/workflows/generate-ci-matrix.yml@e098d85382340e1212701660084143f700de039d # v1.24.3
+    with:
+      glpi-version: "11.0.x"
+  ci:
+    name: "GLPI ${{ matrix.glpi-version }} - php:${{ matrix.php-version }} - ${{ matrix.db-image }}"
+    needs: generate-ci-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-ci-matrix.outputs.matrix) }}
+    # TODO: Use the official GLPI action when they pin all the action SHA
+    uses: ./.github/workflows/continuous-integration.yaml
+    with:
+      plugin-key: inventorymultitenancy
+      glpi-version: ${{ matrix.glpi-version }}
+      php-version: ${{ matrix.php-version }}
+      db-image: ${{ matrix.db-image }}

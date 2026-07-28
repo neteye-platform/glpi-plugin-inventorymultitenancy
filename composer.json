@@ -1,0 +1,21 @@
+{
+    "name": "neteye/inventorymultitenancy",
+    "description": "GLPI plugin that enforces tenant isolation during native inventory import.",
+    "type": "glpi-plugin",
+    "license": [
+        "MIT",
+        "Apache-2.0"
+    ],
+    "require": {
+        "php": ">=7.4"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "GlpiPlugin\\Inventorymultitenancy\\Tests\\": "tests/"
+        }
+    }
+}
