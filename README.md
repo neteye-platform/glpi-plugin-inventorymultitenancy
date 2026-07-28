@@ -72,7 +72,9 @@ your GLPI deployment uses a build that includes this modification.
 
    ```sh
    cd /var/www/glpi/plugins
-   git clone <repository-url> inventorymultitenancy
+   git clone \
+     https://github.com/neteye-platform/glpi-plugin-inventorymultitenancy \
+     inventorymultitenancy
    ```
 
 2. In GLPI, go to **Setup > Plugins**.
