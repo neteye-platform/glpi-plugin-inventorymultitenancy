@@ -18,7 +18,7 @@ jobs:
       contents: write
     runs-on: "ubuntu-latest"
     container:
-      image: "ghcr.io/glpi-project/plugin-builder@sha256:08c6d560084c6d8d468fcf7223d547b6fd0c6ba9c7e47c93837a93a7e787ce1e"
+      image: "ghcr.io/glpi-project/plugin-builder@sha256:1ccd004031f28e2b7a7bf2ea7b4b1a5294579be1b7ef839039017cc95f0560bf"
     steps:
       - name: "Checkout"
         uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
