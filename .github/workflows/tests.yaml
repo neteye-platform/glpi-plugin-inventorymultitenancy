@@ -11,7 +11,7 @@ permissions:
 jobs:
   generate-ci-matrix:
     name: Generate CI matrix
-    uses: glpi-project/plugin-ci-workflows/.github/workflows/generate-ci-matrix.yml@f2e43f479faaf1b1cabe4fade9a2e49bee77e9e8 # v1.25.0
+    uses: glpi-project/plugin-ci-workflows/.github/workflows/generate-ci-matrix.yml@e64f6feaa4e8656df3ac985a35a50e6f3f4a33eb # v1.26.0
     with:
       glpi-version: "11.0.x"
   ci:
