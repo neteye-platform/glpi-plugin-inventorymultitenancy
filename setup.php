@@ -1,5 +1,5 @@
 <?php
-define('PLUGIN_INVENTORYMULTITENANCY_VERSION', '1.0.0');
+define('PLUGIN_INVENTORYMULTITENANCY_VERSION', '1.0.2');
 
 function plugin_version_inventorymultitenancy()
 {
