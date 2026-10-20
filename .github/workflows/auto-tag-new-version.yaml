@@ -1,4 +1,3 @@
-# TODO: Use the official GLPI action when they pin all the action SHA
 name: Automatically tag new version
 
 on:
@@ -7,61 +6,27 @@ on:
       - "main"
       - "maint-*"
 
+permissions:
+  contents: read
+
 jobs:
-  auto-tag-new-version:
-    name: "Automatically tag new version"
-    permissions:
-      contents: write
-    runs-on: "ubuntu-latest"
-    steps:
-      - name: "Checkout"
-        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
-        with:
-          fetch-depth: 0 # see https://github.com/actions/checkout/issues/1471
-          fetch-tags: true
-          persist-credentials: false
-      - name: "Extract version"
-        run: |
-          sudo apt-get update
-          sudo apt-get install --assume-yes --no-install-recommends --quiet pcregrep
-          VERSION=$(pcregrep -o1 "define\s*\(\s*['\"]PLUGIN_[A-Z]+_VERSION['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)" setup.php)
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
-      - name: "Check if tag exists"
-        run: |
-          CREATE_TAG=no
-          if [[ ! -z "$VERSION" && -z "$(git tag -l "$VERSION")" ]]; then
-            CREATE_TAG=yes
-          fi
-          echo "CREATE_TAG=${CREATE_TAG}" >> $GITHUB_ENV
-      - name: Generate GitHub App token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        id: generate-token
-        with:
-          app-id: ${{ vars.NETEYE_APP_ID }}
-          private-key: ${{ secrets.NETEYE_APP_PRIVATE_KEY }}
-          permission-contents: write
-      - name: "Create tag"
-        if: ${{ env.CREATE_TAG == 'yes' }}
-        uses: "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3" # v9.0.0
-        with:
-          # A PAT is required.
-          # From https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow:
-          # > When you use the repository's GITHUB_TOKEN to perform tasks, events triggered by the GITHUB_TOKEN,
-          # > with the exception of workflow_dispatch and repository_dispatch, will not create a new workflow run.
-          # > This prevents you from accidentally creating recursive workflow runs. For example, if a workflow run pushes
-          # > code using the repository's GITHUB_TOKEN, a new workflow will not run even when the repository
-          # > contains a workflow configured to run when push events occur.
-          github-token: ${{ steps.generate-token.outputs.token }}
-          script: |
-            try {
-              github.rest.git.createRef(
-                {
-                  ref: `refs/tags/${process.env.VERSION}`,
-                  sha: context.sha,
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                }
-              );
-            } catch (error) {
-              core.setFailed(error.message);
-            }
+  generate-github-app-token:
+    name: Generate GitHub App token
+    uses: ./.github/workflows/generate-github-app-token.yaml
+    secrets: inherit
+
+  automatically-tag-new-version:
+    name: Automatically tag new version
+    needs: generate-github-app-token
+    uses: glpi-project/plugin-release-workflows/.github/workflows/auto-tag-new-version.yml@ee870668675e2e8355844048c5d5844f18556708 # v1.6.0
+    secrets:
+      # A GitHub App token is required so that the tag push triggers the release workflow.
+      github-token: ${{ fromJSON(needs.generate-github-app-token.outputs.token) }}
+
+  revoke-github-app-token:
+    name: Revoke GitHub App token
+    needs: [generate-github-app-token, automatically-tag-new-version]
+    if: always() && needs.generate-github-app-token.result == 'success'
+    uses: ./.github/workflows/revoke-github-app-token.yaml
+    secrets:
+      token: ${{ fromJSON(needs.generate-github-app-token.outputs.token) }}
