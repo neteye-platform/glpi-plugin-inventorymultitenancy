@@ -42,8 +42,6 @@ on:
     secrets:
       NETEYE_APP_PRIVATE_KEY:
         required: true
-      ACTIONS_RUNNER_DEBUG:
-        required: false
     outputs:
       token:
         description: "The GitHub App token, encoded as a JSON string to be decoded with fromJSON()"
@@ -56,7 +54,8 @@ jobs:
     name: Generate GitHub App token
     runs-on: ubuntu-latest
     env:
-      # Secrets cannot be referenced directly in `if` conditions.
+      # Secrets cannot be referenced directly in `if` conditions. ACTIONS_RUNNER_DEBUG is a reserved
+      # name that cannot be declared in `workflow_call`: it is received through `secrets: inherit`.
       ACTIONS_RUNNER_DEBUG_SECRET: ${{ secrets.ACTIONS_RUNNER_DEBUG }}
     outputs:
       token: ${{ steps.encode-token.outputs.token }}
