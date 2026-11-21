@@ -17,7 +17,7 @@ jobs:
   publish-release:
     name: Publish release
     needs: generate-github-app-token
-    uses: glpi-project/plugin-release-workflows/.github/workflows/publish-release.yml@ee870668675e2e8355844048c5d5844f18556708 # v1.6.0
+    uses: glpi-project/plugin-release-workflows/.github/workflows/publish-release.yml@0c6d1eb2418098a5808f53f030366a5de27eede9 # v1.6.1
     secrets:
       github-token: ${{ fromJSON(needs.generate-github-app-token.outputs.token) }}
 
